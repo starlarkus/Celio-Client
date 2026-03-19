@@ -96,6 +96,12 @@ export class TradeEmuComponent {
         input.value = '';
       })
     }
+    else if (input.files && input.files.length > 0 && input.files[0].size == 80) {
+      PkmnFile.fromFile(input.files[0]).then(pkmFile => {
+        this.pkmFiles.push(pkmFile);
+        input.value = '';
+      })
+    }
   }
 
   async enableTradeMode():Promise<boolean> {
