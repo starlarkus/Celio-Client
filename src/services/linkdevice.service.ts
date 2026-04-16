@@ -37,7 +37,7 @@ export enum CommandType {
 export enum Mode {
   tradeEmu = 0x00,
   onlineLink = 0x01,
-  gbaPassthrough = 0x04
+  advanceWars = 0x04
 }
 
 export type StatusHandler = (status: LinkStatus) => void;

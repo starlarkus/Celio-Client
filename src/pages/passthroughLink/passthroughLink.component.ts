@@ -112,9 +112,9 @@ export class PassthroughLinkComponent {
     });
   }
 
-  private enablePassthroughMode():Promise<void> {
+  private enableAdvanceWarsMode():Promise<void> {
     let args: Uint8Array = new Uint8Array(1);
-    args[0] = Mode.gbaPassthrough;
+    args[0] = Mode.advanceWars;
     return new Promise<void>((resolve, reject) => {
       this.linkDeviceService.sendCommand(CommandType.SetMode, args).then(ok => {
         if (!ok) {
@@ -151,7 +151,7 @@ export class PassthroughLinkComponent {
     const waitForReady = this.createReadyPromise();
 
     this.sendCancel()
-      .then(() => this.enablePassthroughMode())
+      .then(() => this.enableAdvanceWarsMode())
       .then(() => waitForReady)
       .then(() => this.stepState = StepsState.Ready)
       .catch(error => {
