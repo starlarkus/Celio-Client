@@ -104,6 +104,24 @@ export class LinkDeviceService {
     this.device!.transferIn(this.dataEndpoint, this.endPointBufferSize).then((result: USBInTransferResult) => {
       if (result.data && result.data.byteLength == 64) {
         const uint16Array = new Uint16Array(result.data.buffer, result.data.byteOffset, 32);
+
+        // Diagnostic log packets emitted by the AW firmware use the data
+        // endpoint but are tagged with word 0 = 0x474C ("LG") and word 31 =
+        // 0xFFFF. Normal relay packets put a count (0..31) in word 31, so this
+        // is an unambiguous marker. Print to console and drop; do not forward.
+        if (uint16Array[31] === 0xFFFF && uint16Array[0] === 0x474C) {
+          const tag = uint16Array[1];
+          const role = uint16Array[2];
+          const count = uint16Array[3];
+          const payload = Array.from(uint16Array.slice(4, 4 + Math.min(count, 27)),
+            v => v.toString(16).padStart(4, '0')).join(' ');
+          const tagName = { 1: 'GBA_PKT', 2: 'PARTNER_PKT', 3: 'PHASE', 4: 'START_PRESS' }[tag] ?? `TAG_${tag}`;
+          const roleName = role === 0 ? 'slave' : role === 1 ? 'master' : role === 0xFF ? 'partner' : `role_${role}`;
+          console.log(`[AW ${roleName}] ${tagName}: ${payload}`);
+          this.readData();
+          return;
+        }
+
         const dataArray = Array.from(uint16Array) as DataArray;
         this.dataEventSubject.next(dataArray);
       }
