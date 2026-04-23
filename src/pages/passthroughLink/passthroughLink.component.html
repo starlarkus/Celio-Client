@@ -26,6 +26,17 @@
     <img *ngIf="isCurrentlyIn(StepsState.ConnectingCelioDevice)" src="assets/down_arrow.png" class="animate-bob absolute bottom-3 right-2 w-6 h-6 image-pixelated" />
   </div>
 
+  <!-- Local Test Mode (dev/debug): single-GBA test without server/partner -->
+  <div *ngIf="hasReached(StepsState.JoiningSession) && yetToReach(StepsState.Ready)" class="box relative mt-2">
+    <div class="flex w-full items-center gap-4">
+      <div class="font-Gen3 text-xl flex-grow">
+        Local Test Mode (no partner):
+        <span class="text-sm opacity-70">Drives the connected master GBA past the lobby without needing a second adapter or server.</span>
+      </div>
+      <button (click)="startLocalTest()" class="btn btn-md btn-warning">Start Local Test</button>
+    </div>
+  </div>
+
   <div class="divider"></div>
 
   <div [class.opacity-100]="hasReached(StepsState.JoiningSession)" class="transition-opacity opacity-0 duration-500 ease-in-out">

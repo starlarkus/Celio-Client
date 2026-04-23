@@ -7,6 +7,7 @@ import {Subscription} from 'rxjs';
 import {PlayerSessionService} from '../../services/playersession.service';
 import {WebSocketService} from '../../services/websocket.service';
 import {LinkdeviceExchangeSession} from '../onlineLink/linkdeviceExchangeSession';
+import {LinkdeviceLocalTestSession} from '../onlineLink/linkdeviceLocalTestSession';
 import {ToastComponent} from '../../Component/toast.component';
 import {environment} from '../../environments/environment';
 
@@ -45,6 +46,7 @@ export class PassthroughLinkComponent {
   private disconnectSubscription: Subscription;
 
   private linkSession: LinkdeviceExchangeSession | undefined = undefined;
+  private localTestSession: LinkdeviceLocalTestSession | undefined = undefined;
   protected webUsbError: boolean = false;
 
   constructor(private cd: ChangeDetectorRef, private playerSessionService: PlayerSessionService, private socket: WebSocketService) {
@@ -83,6 +85,7 @@ export class PassthroughLinkComponent {
     this.linkSessionCloseSubscription.unsubscribe();
     this.disconnectSubscription.unsubscribe();
     this.linkSession?.destroy();
+    this.localTestSession?.destroy();
   }
 
   connect(): void {
@@ -162,10 +165,73 @@ export class PassthroughLinkComponent {
 
   }
 
+  // Local-only test mode: skip WebSocket/partner entirely. Connects to the
+  // adapter, activates AW mode, and runs a minimal fake-slave responder in
+  // the browser. Lets you drive a single physical master GBA into map-select
+  // and beyond without a second GBA or running server.
+  //
+  // This method orchestrates the normal state transitions the server would
+  // usually handle: SetMode → wait AwaitMode → SetModeMaster → wait
+  // HandshakeReceived → StartHandshake → wait LinkConnected → ConnectLink.
+  async startLocalTest() {
+    try {
+      await this.sendCancel();
+      await this.enableAdvanceWarsMode();
+      await this.createReadyPromise();
+      await this.waitForStatus(LinkStatus.AwaitMode);
+      // Firmware "SetModeSlave" = adapter is PIO slave → GBA becomes
+      // the parent/master (slot 0). This is what we want so the single
+      // physical GBA acts as master and the fake slave lives in the browser.
+      await this.sendCommand(CommandType.SetModeSlave);
+      await this.waitForStatus(LinkStatus.HandshakeReceived);
+      await this.sendCommand(CommandType.StartHandshake);
+      await this.waitForStatus(LinkStatus.LinkConnected);
+      await this.sendCommand(CommandType.ConnectLink);
+
+      this.localTestSession?.destroy();
+      this.localTestSession = new LinkdeviceLocalTestSession(this.linkDeviceService);
+      this.stepState = StepsState.Ready;
+      this.cd.detectChanges();
+      console.log('%c[LocalTest] Session active — fake slave echo for CMD_SYNC only',
+                  'color: #00aa00; font-weight: bold');
+    } catch (error: any) {
+      this.toast.show(error.message || String(error), 'error', 4000);
+      console.error(error);
+      this.disconnect();
+    }
+  }
+
+  private sendCommand(cmd: CommandType): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.linkDeviceService.sendCommand(cmd).then(ok => {
+        if (!ok) reject(new Error(`Failed to send ${CommandType[cmd]} command`));
+        else resolve();
+      });
+    });
+  }
+
+  private waitForStatus(target: LinkStatus, timeoutMs = 5000): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const sub = this.linkDeviceService.statusEvents$.subscribe(status => {
+        if (status === target) {
+          clearTimeout(timer);
+          sub.unsubscribe();
+          resolve();
+        }
+      });
+      const timer = setTimeout(() => {
+        sub.unsubscribe();
+        reject(new Error(`Timed out waiting for status ${LinkStatus[target]}`));
+      }, timeoutMs);
+    });
+  }
+
   disconnect(): void {
     this.linkDeviceService.sendCommand(CommandType.Cancel);
     this.stepState = StepsState.JoiningSession;
     this.playerSessionService.leaveSession();
+    this.localTestSession?.destroy();
+    this.localTestSession = undefined;
     this.renewLinkSession();
     this.cd.detectChanges();
   }
